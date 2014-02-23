@@ -268,7 +268,7 @@ class Measurement(db.Expando):
     for k, v in input_dict.items():
       # body, headers, and error messages can be fairly long.
       # Use the Text data type instead
-      if k == 'body' or k == 'headers' or k == 'error':
+      if k == 'body' or k == 'headers' or k == 'error' or k == 'context_results':
         setattr(self, 'mval_' + k, db.Text(v))
       else:
         setattr(self, 'mval_' + k, v)

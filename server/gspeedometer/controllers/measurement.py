@@ -76,6 +76,11 @@ class Measurement(webapp.RequestHandler):
           device_properties = device.GetLatestDeviceProperties(
               device_info, create_new_if_none=True)
         device_properties.put()
+        
+        if 'context_results' in measurement_dict:
+            if 'values' in  measurement_dict:
+                  measurement_dict['values']['context_results']=str(measurement_dict['context_results'])
+            del measurement_dict['context_results']
 
         measurement = model.Measurement(parent=device_info)
         util.ConvertFromDict(measurement, measurement_dict)
