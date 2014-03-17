@@ -116,6 +116,12 @@ class DeviceProperties(db.Model):
   cell_info = db.StringProperty()
   # Receive signal strength of the current cellular connection
   rssi = db.IntegerProperty()
+  # Mobilyzer version
+  mobilyzer_version = db.StringProperty();
+  # Host apps
+  host_apps = db.StringListProperty();
+  # Request App
+  request_app = db.StringProperty();
 
   def JSON_DECODE_location(self, inputval):
     lat = float(inputval['latitude'])
