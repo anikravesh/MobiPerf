@@ -384,4 +384,9 @@ class RRCInferenceSizesRawData(db.Model):
   time_delay = db.IntegerProperty()
   result = db.IntegerProperty()
   size = db.IntegerProperty()
-  
+
+class CDNIpData(db.Model):
+  ip = db.StringProperty()
+  prefix = db.StringProperty()
+  timestamp = db.DateTimeProperty(auto_now=True)
+

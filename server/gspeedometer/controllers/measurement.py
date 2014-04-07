@@ -31,6 +31,8 @@ from gspeedometer import model
 from gspeedometer.controllers import device
 from gspeedometer.helpers import error
 from gspeedometer.helpers import util
+from datetime import datetime, timedelta
+import time
 
 # list of supported measurement types
 MEASUREMENT_TYPES = [('ping', 'ping'),
@@ -86,8 +88,38 @@ class Measurement(webapp.RequestHandler):
         util.ConvertFromDict(measurement, measurement_dict)
         measurement.device_properties = device_properties
         measurement.put()
+        
+        #extracting the IPs from the ping measurement results to the main CDN domain
+        if measurement.success==True and measurement.type=="ping":
+            if measurement.task!=None and measurement.task.GetParam('target')=="www.edgecast.com":
+                ipdata=model.CDNIpData()
+                target_ip=measurement_dict['values']['target_ip'].replace('"','')
+                prefix=target_ip[:target_ip.rfind('.')+1].replace('"','')
+                q = model.CDNIpData.all()
+                q.filter("prefix =", prefix)
+                record=q.get()
+                if record!=None:
+                    #updating timestamp (expiration time)
+                    record.put()
+                else:
+                    #inserting the new IP record to the data store
+                    record=model.CDNIpData()
+                    record.ip=target_ip
+                    record.prefix=prefix
+                    record.put()
+
+
     except Exception, e:
       logging.exception('Got exception posting measurements')
+      
+    #removing expired IP records from data store
+    q = model.CDNIpData.all()
+    for record in q.run():
+        delta=datetime.now() - record.timestamp
+        if delta.days >= 1:
+            record.delete() 
+        
+          
 
     logging.info('PostMeasurement: Done processing measurements')
     response = {'success': True}

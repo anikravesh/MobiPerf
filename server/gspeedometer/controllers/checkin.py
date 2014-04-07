@@ -19,6 +19,8 @@
 __author__ = 'mdw@google.com (Matt Welsh)'
 
 import logging
+import datetime
+
 
 from django.utils import simplejson as json
 from google.appengine.api import users
@@ -35,11 +37,13 @@ class Checkin(webapp.RequestHandler):
 
   def Checkin(self, **unused_args):
     """Handler for checkin requests."""
+    
     if self.request.method.lower() != 'post':
       raise error.BadRequest('Not a POST request.')
 
     checkin = json.loads(self.request.body)
     logging.info('Got checkin: %s', self.request.body)
+    
 
     try:
       # Change device id such that it is anonymized, but preserve TAC.
@@ -49,20 +53,20 @@ class Checkin(webapp.RequestHandler):
       device_id = checkin['id']
       logging.info('Checkin from device %s', device_id)
       device_info = model.DeviceInfo.get_or_insert(device_id)
-
+ 
       device_info.user = users.get_current_user()
       # Don't want the embedded properties in the device_info structure.
       device_info_dict = dict(checkin)
       del device_info_dict['properties']
       util.ConvertFromDict(device_info, device_info_dict)
       device_info.put()
-
+ 
       # Extract DeviceProperties.
       device_properties = model.DeviceProperties(parent=device_info)
       device_properties.device_info = device_info
       util.ConvertFromDict(device_properties, checkin['properties'])
       device_properties.put()
-
+ 
       device_schedule = GetDeviceSchedule(device_properties)
       device_schedule_json = EncodeScheduleAsJson(device_schedule)
       logging.info('Sending checkin response: %s', device_schedule_json)
@@ -94,7 +98,6 @@ def GetDeviceSchedule(device_properties):
     else:
       # Does the filter match this device?
       devices = []
-
       # Match against DeviceProperties
       try:
         matching_device_properties = model.DeviceProperties.gql(
@@ -119,12 +122,24 @@ def GetDeviceSchedule(device_properties):
   for dt in device_properties.device_info.devicetask_set:
     dt.delete()
 
+
   # Assign matched tasks to this device
   for task in matched:
     device_task = model.DeviceTask()
     device_task.task = task
     device_task.device_info = device_properties.device_info
     device_task.put()
+
+  q = model.CDNIpData.all()
+  for record in q.run():
+    ping_task=model.Task()
+    ping_task.user=users.get_current_user()
+    ping_task.count=1
+    ping_task.interval_sec=3600.0
+    ping_task.created = datetime.datetime.utcnow()
+    ping_task.type="ping"
+    setattr(ping_task, 'mparam_target', record.ip)
+    matched.add(ping_task) 
 
   return matched
 
@@ -138,7 +153,11 @@ def EncodeScheduleAsJson(schedule):
         task, exclude_fields=['user', 'tag', 'filter'])
     # Need to add the parameters and key fields
     output_task['parameters'] = task.Params()
-    output_task['key'] = str(task.key().id_or_name())
+    try:
+        output_task['key'] = str(task.key().id_or_name())
+    except db.NotSavedError:
+        output_task['key'] = None
+        
     output.append(output_task)
 
   return json.dumps(output)
