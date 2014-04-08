@@ -42,6 +42,9 @@ MEASUREMENT_TYPES = [('ping', 'ping'),
                      ('tcpthroughput', 'TCP throughput'),
                      ('rrc', 'RRC inference')]
 
+CDN_TARGETS = ['www.edgecast.com' , 'www.google.com' , 
+               'www.akamai.com' , 'www.amazon.com']
+
 class Measurement(webapp.RequestHandler):
   """Measurement request handler."""
 
@@ -91,9 +94,11 @@ class Measurement(webapp.RequestHandler):
         
         #extracting the IPs from the ping measurement results to the main CDN domain
         if measurement.success==True and measurement.type=="ping":
-            if measurement.task!=None and measurement.task.GetParam('target')=="www.edgecast.com":
+            if measurement.task!=None and measurement.task.GetParam('target') in CDN_TARGETS:
                 ipdata=model.CDNIpData()
                 target_ip=measurement_dict['values']['target_ip'].replace('"','')
+                if ':' in target_ip:
+                    continue
                 prefix=target_ip[:target_ip.rfind('.')+1].replace('"','')
                 q = model.CDNIpData.all()
                 q.filter("prefix =", prefix)
@@ -106,18 +111,19 @@ class Measurement(webapp.RequestHandler):
                     record=model.CDNIpData()
                     record.ip=target_ip
                     record.prefix=prefix
+                    record.cdn_domain=measurement.task.GetParam('target')
                     record.put()
 
 
     except Exception, e:
       logging.exception('Got exception posting measurements')
       
-    #removing expired IP records from data store
-    q = model.CDNIpData.all()
-    for record in q.run():
-        delta=datetime.now() - record.timestamp
-        if delta.days >= 1:
-            record.delete() 
+    # #removing expired IP records from data store
+    # q = model.CDNIpData.all()
+    # for record in q.run():
+    #     delta=datetime.now() - record.timestamp
+    #     if delta.days >= 1:
+    #         record.delete() 
         
           
 

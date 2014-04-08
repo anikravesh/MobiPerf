@@ -389,4 +389,5 @@ class CDNIpData(db.Model):
   ip = db.StringProperty()
   prefix = db.StringProperty()
   timestamp = db.DateTimeProperty(auto_now=True)
+  cdn_domain = db.StringProperty()  
 

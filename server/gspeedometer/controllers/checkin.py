@@ -19,7 +19,6 @@
 __author__ = 'mdw@google.com (Matt Welsh)'
 
 import logging
-import datetime
 
 
 from django.utils import simplejson as json
@@ -30,6 +29,9 @@ from google.appengine.ext import webapp
 from gspeedometer import model
 from gspeedometer.helpers import error
 from gspeedometer.helpers import util
+
+from datetime import datetime, timedelta
+import time
 
 
 class Checkin(webapp.RequestHandler):
@@ -132,11 +134,14 @@ def GetDeviceSchedule(device_properties):
 
   q = model.CDNIpData.all()
   for record in q.run():
+    delta=datetime.now() - record.timestamp
+    if delta.days >= 1:
+        continue      
     ping_task=model.Task()
     ping_task.user=users.get_current_user()
     ping_task.count=1
     ping_task.interval_sec=3600.0
-    ping_task.created = datetime.datetime.utcnow()
+    ping_task.created = datetime.utcnow()
     ping_task.type="ping"
     setattr(ping_task, 'mparam_target', record.ip)
     matched.add(ping_task) 
