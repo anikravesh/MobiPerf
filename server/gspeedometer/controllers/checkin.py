@@ -32,6 +32,7 @@ from gspeedometer.helpers import util
 
 from datetime import datetime, timedelta
 import time
+import random
 
 
 class Checkin(webapp.RequestHandler):
@@ -132,18 +133,24 @@ def GetDeviceSchedule(device_properties):
     device_task.device_info = device_properties.device_info
     device_task.put()
 
+  ip_list=[]
   q = model.CDNIpData.all()
   for record in q.run():
     delta=datetime.now() - record.timestamp
     if delta.days >= 1:
-        continue      
+        continue
+    ip_list.append(record.ip)
+
+  random.shuffle(ip_list)
+  
+  for i in range(0, 10 if len(ip_list)>=10 else len(ip_list)):
     ping_task=model.Task()
     ping_task.user=users.get_current_user()
-    ping_task.count=1
+    ping_task.count=-1
     ping_task.interval_sec=3600.0
     ping_task.created = datetime.utcnow()
     ping_task.type="ping"
-    setattr(ping_task, 'mparam_target', record.ip)
+    setattr(ping_task, 'mparam_target', ip_list[i])
     matched.add(ping_task) 
 
   return matched

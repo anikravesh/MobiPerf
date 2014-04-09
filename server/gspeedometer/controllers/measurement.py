@@ -42,7 +42,7 @@ MEASUREMENT_TYPES = [('ping', 'ping'),
                      ('tcpthroughput', 'TCP throughput'),
                      ('rrc', 'RRC inference')]
 
-CDN_TARGETS = ['www.edgecast.com' , 'www.google.com' , 
+CDN_TARGETS = ['edgecastcdn.net' , 'www.google.com' , 
                'www.akamai.com' , 'www.amazon.com']
 
 class Measurement(webapp.RequestHandler):
