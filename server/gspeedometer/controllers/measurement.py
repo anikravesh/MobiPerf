@@ -42,8 +42,12 @@ MEASUREMENT_TYPES = [('ping', 'ping'),
                      ('tcpthroughput', 'TCP throughput'),
                      ('rrc', 'RRC inference')]
 
-CDN_TARGETS = ['edgecastcdn.net' , 'www.google.com' , 
-               'www.akamai.com' , 'www.amazon.com']
+CDN_TARGETS = ['ec-media.soundcloud.com' , #EdgeCast
+               'video-http.media-imdb.com' , #Amazon CloudFront
+               'cdn2.nflximg.net', #Akamai
+               'img.delvenetworks.com' , # Limelight
+               'www.google.com',
+               'fbcdn-profile-a.akamaihd.net']
 
 class Measurement(webapp.RequestHandler):
   """Measurement request handler."""
@@ -94,7 +98,7 @@ class Measurement(webapp.RequestHandler):
         
         #extracting the IPs from the ping measurement results to the main CDN domain
         if measurement.success==True and measurement.type=="ping":
-            if measurement.task!=None and measurement.task.GetParam('target') in CDN_TARGETS:
+            if ('target' in measurement_dict['parameters']) and  measurement_dict['parameters']['target'] in CDN_TARGETS:
                 ipdata=model.CDNIpData()
                 target_ip=measurement_dict['values']['target_ip'].replace('"','')
                 if ':' in target_ip:
@@ -111,21 +115,58 @@ class Measurement(webapp.RequestHandler):
                     record=model.CDNIpData()
                     record.ip=target_ip
                     record.prefix=prefix
-                    record.cdn_domain=measurement.task.GetParam('target')
+                    record.cdn_domain=measurement_dict['parameters']['target']
                     record.put()
 
+        nettype=properties_dict['network_type'].lower().replace(" ","")
+        # map from deviceid to the list of high ping rtts
+        low_performance_devices={}
+        if measurement.success==True and measurement.type=="ping" and nettype!="wifi":
+            if ('target' in measurement_dict['parameters']) and  measurement_dict['parameters']['target'] in CDN_TARGETS:
+                mean_rtt=float(measurement_dict['values']['mean_rtt_ms'])
+                if util.IsLowPerformance("ping", nettype, mean_rtt):
+                    lat=float(properties_dict['location']['latitude'])
+                    lon=float(properties_dict['location']['longitude'])
+                    carrier=properties_dict['carrier'].lower().replace(" ","")
+                    timestamp=measurement_dict['timestamp']
+                    target=measurement_dict['parameters']['target']
+
+                    # get all the measurement results from the last 24 hours
+                    q = model.Measurement.all()
+                    q.filter("type =" ,"ping")
+                    q.filter("success =", True)
+                    q.filter("timestamp >", datetime.now() - timedelta(hours=24))
+                    for record in q.run():
+                        record_nettype=record.device_properties.network_type.lower().replace(" ","")
+                        if record.GetParam('target') == target and record_nettype!="wifi":
+                            record_rtt=record.GetValue('mean_rtt_ms')
+                            if util.IsLowPerformance("ping", record_nettype, record_rtt):
+                                record_location=record.device_properties.location
+                                record_carrier=record.device_properties.carrier
+                                distance=-1
+                                if record_location.lat!=0.0 and record_location.lon!=0.0:
+                                    distance=util.Distance(lat, lon, record_location.lat, record_location.lon)
+                            
+                                if (distance !=-1 and distance<2000) or record_carrier==carrier:#distance in km
+                                    if not (record.device_properties.device_info.id in low_performance_devices):
+                                        low_performance_devices[record.device_properties.device_info.id]=[]
+                                    low_performance_devices[record.device_properties.device_info.id].append(record_rtt) 
+        
+        #the number of devices should be at-least two
+        if len(low_performance_devices.keys())>=2:
+            query = model.Task.all()
+            query.filter("tag = ", "DIAG_TARGET")#specific ping tasks for target diagnosis, for example, ping to www.facebook.com
+            for diag_target_task in query.run():
+                filter=diag_target_task.filter
+                if not (str(device_info.id) in filter):
+                    if filter == None:
+                        diag_target_task.filter= "id = "+str(device_info.id)
+                    else:
+                        diag_target_task.filter = diag_target_task.filter + " OR id = " +str(device_info.id)
+                    diag_target_task.put()
 
     except Exception, e:
       logging.exception('Got exception posting measurements')
-      
-    # #removing expired IP records from data store
-    # q = model.CDNIpData.all()
-    # for record in q.run():
-    #     delta=datetime.now() - record.timestamp
-    #     if delta.days >= 1:
-    #         record.delete() 
-        
-          
 
     logging.info('PostMeasurement: Done processing measurements')
     response = {'success': True}

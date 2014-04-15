@@ -28,7 +28,7 @@ from google.appengine.ext import db
 from gspeedometer import config_private
 import hashlib
 import logging
-import time
+import time, math
 
 def StringToTime(thestr):
   """Convert an ISO8601 timestring into a datetime object."""
@@ -258,3 +258,19 @@ def HashDeviceId(imei):
   m.update(salted)
   # Base64 encoding to save space.
   return base64.b64encode(m.digest(), '._').strip('=')
+
+def Distance(lat1, lon1, lat2, lon2):
+  r=6371 # in km
+  dLat = math.radians(lat2-lat1)
+  dLon = math.radians(lon2-lon1)
+  a = (math.sin(dLat/2) * math.sin(dLat/2)) +  (math.sin(dLon/2) * math.sin(dLon/2) * math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)))
+  c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+  return r*c
+  
+def IsLowPerformance(measurement_type, nettype, value):
+    if measurement_type=="ping":
+        if value>300:
+            return True
+        if (nettype=="lte" or nettype=="wifi") and value>20:
+            return True
+    return False
